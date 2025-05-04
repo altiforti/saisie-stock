@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saisie Entrées Stock</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            width: 90%;
+            max-width: 600px;
+            margin-top: 20px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #555;
+            margin-top: 15px;
+        }
+        input[type="text"],
+        select {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1.1em;
+        }
+        button {
+            padding: 12px 25px;
+            font-size: 1.1em;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background-color: #5c67f2;
+            color: white;
+            transition: background-color 0.3s ease;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background-color: #4a54c4;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        #ean-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+        #message-area {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            min-height: 40px;
+            background-color: #e9e9e9;
+            color: #333;
+            font-weight: bold;
+            text-align: center;
+        }
+        .hidden {
+            display: none;
+        }
+        .batch-info-display {
+            margin-bottom: 15px;
+            padding: 10px;
+            background-color: #e0e0e0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <!-- On peut garder le logo si le fichier est bien présent -->
+    <img src="/static/logo.jpeg" alt="Logo" style="max-width: 200px; margin-bottom: 20px;">
+
+    <div class="container">
+        <h1>Saisie des Entrées en Stock</h1>
+
+        <div id="batch-setup-section">
+            <h2>1. Définir le Lot</h2>
+            <label for="rayon-select">Rayon</label>
+            <select id="rayon-select" required>
+                <option value="">Chargement...</option>
+            </select>
+
+            <label for="etat-select">État</label>
+            <select id="etat-select" required>
+                <option value="">Chargement...</option>
+                <!-- Options seront chargées dynamiquement -->
+            </select>
+
+            <label for="sous-rayon-input">Sous Rayon (Optionnel)</label>
+            <input type="text" id="sous-rayon-input" placeholder="Précision localisation...">
+
+            <button id="start-scan-button">Commencer la Saisie EAN</button>
+        </div>
+
+        <div id="ean-section" class="hidden">
+            <h2>2. Scanner les EAN</h2>
+            <div id="batch-info-display"></div>
+            <label for="barcode-input">Scanner Code-Barres (EAN)</label>
+            <input type="text" id="barcode-input" placeholder="Scannez les EAN du lot...">
+
+            <button id="end-batch-button">Fin de Lot</button>
+        </div>
+
+        <div id="message-area"></div>
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const rayonSelect = document.getElementById('rayon-select');
+        const etatSelect = document.getElementById('etat-select');
+        const sousRayonInput = document.getElementById('sous-rayon-input');
+        const startScanButton = document.getElementById('start-scan-button');
+        const batchSetupSection = document.getElementById('batch-setup-section');
+
+        const eanSection = document.getElementById('ean-section');
+        const batchInfoDisplay = document.getElementById('batch-info-display');
+        const barcodeInput = document.getElementById('barcode-input');
+        const endBatchButton = document.getElementById('end-batch-button');
+        const messageArea = document.getElementById('message-area');
+
+        let currentBatchInfo = {};
+
+        // --- Functions ---
+
+        // Fonction pour récupérer les options depuis Airtable (via le backend)
+        async function fetchOptions() {
+            try {
+                const response = await fetch('/get_stock_options'); // Nouvelle route backend à créer
+                if (!response.ok) {
+                    throw new Error(`Erreur serveur: ${response.statusText}`);
+                }
+                const options = await response.json();
+
+                // Peupler Rayon
+                rayonSelect.innerHTML = '<option value="">-- Choisir Rayon --</option>'; // Reset
+                options.rayons.forEach(option => {
+                    const optElement = document.createElement('option');
+                    optElement.value = option; // Assumer que la valeur est le nom lui-même
+                    optElement.textContent = option;
+                    rayonSelect.appendChild(optElement);
+                });
+
+                // Peupler État
+                etatSelect.innerHTML = '<option value="">-- Choisir État --</option>'; // Reset
+                options.etats.forEach(option => {
+                    const optElement = document.createElement('option');
+                    optElement.value = option;
+                    optElement.textContent = option;
+                    etatSelect.appendChild(optElement);
+                });
+
+            } catch (error) {
+                console.error('Erreur chargement options:', error);
+                messageArea.textContent = `Erreur chargement options: ${error.message}`;
+                rayonSelect.innerHTML = '<option value="">Erreur chargement</option>';
+                etatSelect.innerHTML = '<option value="">Erreur chargement</option>';
+            }
+        }
+
+        // Fonction pour démarrer la saisie d'un lot
+        function startBatchScan() {
+            const selectedRayon = rayonSelect.value;
+            const selectedEtat = etatSelect.value;
+            const enteredSousRayon = sousRayonInput.value.trim();
+
+            if (!selectedRayon || !selectedEtat) {
+                messageArea.textContent = 'Veuillez sélectionner un Rayon ET un État.';
+                return;
+            }
+
+            currentBatchInfo = {
+                rayon: selectedRayon,
+                etat: selectedEtat,
+                sousRayon: enteredSousRayon
+            };
+
+            // Afficher les infos du lot et cacher la config
+            batchInfoDisplay.textContent = `Lot en cours : Rayon=${currentBatchInfo.rayon}, État=${currentBatchInfo.etat}, Sous-Rayon=${currentBatchInfo.sousRayon || 'N/A'}`;
+            batchSetupSection.classList.add('hidden');
+            eanSection.classList.remove('hidden');
+            messageArea.textContent = 'Prêt à scanner les EAN pour ce lot.';
+            barcodeInput.disabled = false;
+            barcodeInput.focus(); // Mettre le focus sur le champ EAN
+        }
+
+        // Fonction pour terminer la saisie d'un lot
+        function endBatch() {
+            currentBatchInfo = {};
+            eanSection.classList.add('hidden');
+            batchSetupSection.classList.remove('hidden');
+            barcodeInput.value = ''; // Vider le champ EAN
+            barcodeInput.disabled = true;
+            // Réinitialiser les sélecteurs ? Optionnel, peut-être garder pour le prochain lot ?
+            // rayonSelect.value = '';
+            // etatSelect.value = '';
+            // sousRayonInput.value = '';
+            messageArea.textContent = 'Lot terminé. Prêt pour un nouveau lot.';
+        }
+
+        // Fonction pour envoyer l'EAN au backend
+        async function sendEan(ean) {
+            if (!currentBatchInfo.rayon || !currentBatchInfo.etat) {
+                messageArea.textContent = 'Erreur: Informations de lot manquantes.';
+                return;
+            }
+
+            messageArea.textContent = `Envoi EAN: ${ean}...`;
+            try {
+                const response = await fetch('/add_stock_entry', { // Nouvelle route backend
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        ean: ean,
+                        rayon: currentBatchInfo.rayon,
+                        etat: currentBatchInfo.etat,
+                        sous_rayon: currentBatchInfo.sousRayon // Nom du champ backend
+                    })
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    messageArea.textContent = `Succès: EAN ${ean} ajouté. Scannez le suivant.`;
+                    barcodeInput.value = ''; // Clear input pour le prochain scan
+                    barcodeInput.focus(); // Garder le focus
+                } else {
+                    messageArea.textContent = `Erreur: ${result.message || response.statusText}`;
+                }
+            } catch (error) {
+                messageArea.textContent = `Erreur réseau: ${error.message}`;
+            }
+        }
+
+        // --- Event Listeners ---
+        document.addEventListener('DOMContentLoaded', fetchOptions); // Charger les options au démarrage
+
+        startScanButton.addEventListener('click', startBatchScan);
+
+        endBatchButton.addEventListener('click', endBatch);
+
+        barcodeInput.addEventListener('keypress', async (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                const ean = barcodeInput.value.trim();
+                const eanRegex = /^\d{13}$/; // Basic EAN-13 check
+
+                if (!ean) {
+                    messageArea.textContent = 'Veuillez scanner un EAN.';
+                    return;
+                }
+                if (!eanRegex.test(ean)) {
+                    messageArea.textContent = 'Format EAN invalide (13 chiffres attendus).';
+                    return;
+                }
+                sendEan(ean);
+            }
+        });
+
+        // Initial state
+        barcodeInput.disabled = true;
+
+    </script>
+</body>
+</html>
+
