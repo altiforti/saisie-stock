@@ -33,10 +33,10 @@ def get_airtable_select_options(table_name, field_name):
     Returns predefined lists for ETAT and RAYON.
     """
     if field_name == FIELD_ETAT:
-        print(f"Returning predefined list for \'{FIELD_ETAT}\' in new order.")
+        print(f"Returning predefined list for ", FIELD_ETAT, " in new order.") # Modifié pour éviter f-string complexe
         return ["EC", "BE", "TB", "CN", "NE"] # Ordre modifié ici
     elif field_name == FIELD_RAYON:
-        print(f"Returning predefined list for \'{FIELD_RAYON}\'.")
+        print(f"Returning predefined list for ", FIELD_RAYON) # Modifié pour éviter f-string complexe
         # Liste fournie par l'utilisateur
         return [
             "psychanalyse", "histoire", "Jeunesse", "psychologie", "Politinternatio", "art",
@@ -141,7 +141,8 @@ def add_stock_entry():
 
     try:
         created_record = airtable.insert(record_data)
-        print(f"Airtable record created: {created_record["id"]} for EAN {ean}")
+        # Correction de la f-string ici:
+        print(f"Airtable record created: {created_record['id']} for EAN {ean}")
         return jsonify({"message": f"EAN {ean} ajouté avec succès."}), 201
 
     except Exception as e:
@@ -152,7 +153,7 @@ def add_stock_entry():
         elif "AUTHENTICATION_REQUIRED" in error_message or "INVALID_API_KEY" in error_message:
              return jsonify({"message": f"Erreur Airtable: Clé API invalide ou manquante."}), 500
         elif "INVALID_REQUEST_UNKNOWN_FIELD_NAME" in error_message:
-             unknown_field = error_message.split("name '")[-1].split("'")[0] if "name '" in error_message else "inconnu"
+             unknown_field = error_message.split("name ")[-1].split("'")[0] if "name '" in error_message else "inconnu"
              return jsonify({"message": f"Erreur Airtable: Nom de champ invalide ({unknown_field}). Vérifiez les noms: {FIELD_EAN}, {FIELD_RAYON}, {FIELD_ETAT}, {FIELD_SOUS_RAYON}."}), 500
         elif "INVALID_VALUE_FOR_COLUMN" in error_message:
              return jsonify({"message": f"Erreur Airtable: Valeur invalide pour une colonne (probablement Rayon ou Etat). Vérifiez les options sélectionnées."}), 400
