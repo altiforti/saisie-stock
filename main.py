@@ -33,10 +33,10 @@ def get_airtable_select_options(table_name, field_name):
     Returns predefined lists for ETAT and RAYON.
     """
     if field_name == FIELD_ETAT:
-        print(f"Returning predefined list for ", FIELD_ETAT, " in new order.") # Modifié pour éviter f-string complexe
+        print(f"Returning predefined list for ETAT in new order.") 
         return ["EC", "BE", "TB", "CN", "NE"] # Ordre modifié ici
     elif field_name == FIELD_RAYON:
-        print(f"Returning predefined list for ", FIELD_RAYON) # Modifié pour éviter f-string complexe
+        print(f"Returning predefined list for RAYON") 
         # Liste fournie par l'utilisateur
         rayons = [
             "psychanalyse", "histoire", "Jeunesse", "psychologie", "Politinternatio", "art",
@@ -146,8 +146,8 @@ def add_stock_entry():
 
     try:
         created_record = airtable.insert(record_data)
-        # Correction de la f-string ici:
-        print(f"Airtable record created: {created_record["id"]} for EAN {ean}")
+        record_id = created_record.get("id", "N/A") # Safely get id
+        print(f"Airtable record created: {record_id} for EAN {ean}")
         return jsonify({"message": f"EAN {ean} ajouté avec succès."}), 201
 
     except Exception as e:
